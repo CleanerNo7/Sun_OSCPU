@@ -10,6 +10,11 @@
 `define ST_TYPE     7'b0100011
 `define IW_TYPE     7'b0011011
 `define RW_TYPE     7'b0111011
+`define LUI         7'b0110111
+`define AUIPC       7'b0010111
+`define JAL         7'b1101111
+`define JALR        7'b1100111
+`define B_TYPE      7'b1100011
 //default
 `define INST_NOP    8'h10
 //i-type & r-type
@@ -43,3 +48,20 @@
 `define INST_SH     8'h2B
 `define INST_SW     8'h2C
 `define INST_SD     8'h2D
+
+
+//ui
+`define INST_LUI    8'h31
+`define INST_AUIPC  8'h32
+
+// j
+`define INST_JAL    8'h3A
+`define INST_JALR   8'h3B
+
+//b
+`define INST_BEQ    8'h41
+`define INST_BNE    8'h42
+`define INST_BLT    8'h43
+`define INST_BGE    8'h44
+`define INST_BLTU   8'h45
+`define INST_BGEU   8'h46

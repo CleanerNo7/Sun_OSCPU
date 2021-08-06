@@ -22,35 +22,37 @@ module SimTop(
 );
 
 //if_stage
-wire [63 : 0]pc;
-wire [31 : 0]inst;
+reg  [63 : 0]pc;
+reg  [31 : 0]inst;
 // id_stage
 // id_stage -> regfile
 wire rs1_r_ena;
 wire [4 : 0]rs1_r_addr;
 wire rs2_r_ena;
 wire [4 : 0]rs2_r_addr;
-wire rd_w_ena;
+wire rd_data_wb;
 wire [4 : 0]rd_addr;
+wire        rd_w_ena;
 // id_stage -> exe_stage
+wire pc_ena_exe;
 reg  [4 : 0]inst_type;
 reg  [7 : 0]inst_opcode;
-reg  [`REG_BUS]op1;
-reg  [`REG_BUS]op2;
+wire [`REG_BUS]op1;
+wire [`REG_BUS]op2;
 // id_stage -> datamem_stage
 wire mem_r_ena;
 wire mem_w_ena;
 wire mem_r_addr;
 wire mem_w_addr;
 // exe_stage -> datamem_stage
-reg  mem_w_data;
-wire datamem_ena;
-// exe_stage -> memwb_stage
-reg  [2 : 0]mem;
-wire memwb_ena;
-// datamem_stage -> memwb_stage
+wire mem_w_data;
+// exe_stage -> wb_stage
+wire  [2 : 0]mem;
+wire  [`REG_BUS]rd_data_exe;
+wire  [`REG_BUS]rd_data_exe_ena;
+// datamem_stage -> wb_stage
 wire [`REG_BUS]mem_r_data;
-wire wb_ena;
+wire rd_data_mem_ena;
 
 // regfile -> id_stage
 wire [`REG_BUS] r_data1;
@@ -60,13 +62,20 @@ wire [`REG_BUS] regs[0 : 31];
 
 // exe_stage
 // exe_stage -> other stage
-reg  [4 : 0]inst_type_o;
+wire  [4 : 0]inst_type_o;
 // exe_stage -> regfile
-reg  [`REG_BUS]rd_data;
+wire  [`REG_BUS]rd_data_exe;
+wire            rd_data_exe_ena;
+wire  [`REG_BUS]rd_data;
+wire  [`REG_BUS]offset;
+wire            pc_ena_if;
+wire  [`REG_BUS]pc_if;
 
 if_stage If_stage(
   .clk                    (clock),
   .rst                    (reset),
+  .pc_ena_if              (pc_ena_if),
+  .pc_if                  (pc_if),
   
   .pc                     (pc),
   .inst                   (inst)
@@ -79,6 +88,7 @@ id_stage Id_stage(
   .rs2_data               (r_data2),
 
 
+  .pc_ena_exe             (pc_ena_exe),
   .rs1_r_ena              (rs1_r_ena),
   .rs2_r_ena              (rs2_r_ena),
   .mem_r_ena              (mem_r_ena),
@@ -94,38 +104,43 @@ id_stage Id_stage(
   .inst_type              (inst_type),
   .inst_opcode            (inst_opcode),
   .op1                    (op1),
-  .op2                    (op2)
+  .op2                    (op2),
+  .offset                 (offset)
 );
 
 exe_stage Exe_stage(
   .rst                    (reset),
-  .mem_r_ena              (mem_r_ena),
-  .mem_w_ena              (mem_w_ena),
 
   .inst_type_i            (inst_type),
   .inst_opcode            (inst_opcode),
   .op1                    (op1),
   .op2                    (op2),
+  .pc_ena_exe             (pc_ena_exe),
+  .pc                     (pc),
+  .offset                 (offset),
   
   .inst_type_o            (inst_type_o),
-  .datamem_ena            (datamem_ena),
-  .memwb_ena              (memwb_ena),
+  .pc_ena_if              (pc_ena_if),
 
   .mem                    (mem),
   .mem_w_data             (mem_w_data),
-  .rd_data                (rd_data)
+  .rd_data_exe            (rd_data_exe),
+  .rd_data_exe_ena        (rd_data_exe_ena),
+  .pc_if                  (pc_if)
 );
 
 regfile Regfile(
   .clk                    (clock),
   .rst                    (reset),
+
   .w_addr                 (rd_addr),
   .w_data                 (rd_data),
-  .w_ena                  (rd_w_ena),
+  .w_ena                  (rd_data_wb),
   
   .r_addr1                (rs1_r_addr),
   .r_data1                (r_data1),
   .r_ena1                 (rs1_r_ena),
+  
   .r_addr2                (rs2_r_addr),
   .r_data2                (r_data2),
   .r_ena2                 (rs2_r_ena),
@@ -136,24 +151,30 @@ regfile Regfile(
 datamem Datamem(
   .clk                    (clock),
   .rst                    (reset),
-  .datamem_ena            (datamem_ena),
-  .memwb_ena              (memwb_ena),
+  .mem_r_ena              (mem_r_ena),
+  .mem_w_ena              (mem_w_ena),
   .mem_r_addr             (mem_r_addr),
   .mem_w_addr             (mem_w_addr),
   .mem_w_data             (mem_w_data),
 
   .mem_r_data             (mem_r_data),
-  .wb_ena                 (wb_ena)
+  .rd_data_mem_ena        (rd_data_mem_ena)
 );
 
-memwb Memwb(
+wb WB(
   .clk                    (clock),
   .rst                    (reset),
-  .wb_ena                 (wb_ena),
+
+  .rd_data_mem_ena        (rd_data_mem_ena),
+  .rd_data_exe_ena        (rd_data_exe_ena),
+
   .mem_r_data             (mem_r_data),
+  .rd_data_exe            (rd_data_exe),
+
   .mem                    (mem),
 
-  .rd_data                (rd_data)
+  .rd_data                (rd_data),
+  .rd_data_wb             (rd_data_wb)
 );
 
 // Difftest
