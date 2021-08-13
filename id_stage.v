@@ -5,7 +5,8 @@
 
 module id_stage(
   input wire  rst,
-  input reg   [31 : 0]inst,
+  input wire  [31 : 0]inst,
+  input wire          inst_ready,
   input wire  [`REG_BUS]rs1_data,
   input wire  [`REG_BUS]rs2_data,
 
@@ -20,11 +21,15 @@ module id_stage(
   output wire [4 : 0]rs1_r_addr,
   output wire [4 : 0]rs2_r_addr,
   output wire [4 : 0]rd_addr,
-  output wire [`REG_BUS]mem_r_addr,
-  output wire [`REG_BUS]mem_w_addr,
+  output wire [`REG_BUS]mem_addr,
   
-  output reg  [4 : 0]inst_type,
-  output reg  [7 : 0]inst_opcode,
+  output wire [4 : 0]inst_type,
+  output wire [7 : 0]inst_opcode,
+  output wire        inst_w,
+  output wire [2 : 0]load_type,
+  output wire [2 : 0]store_type,
+
+  output wire [`REG_BUS]mem_w_data,
   output wire [`REG_BUS]op1,
   output wire [`REG_BUS]op2,
   output wire [`REG_BUS]offset
@@ -60,10 +65,12 @@ wire    [`REG_BUS]offset_b;
 wire           op2_ena;
 wire [`REG_BUS]op2_i;
 wire [`REG_BUS]op1_ui;
+wire [`REG_BUS]mem_r_addr,
+               mem_w_addr;
 
 
 //拆解
-assign opcode = ( rst == 1'b0 ) ? inst[6 : 0] : 7'b0;
+assign opcode = ( rst == 1'b1 ) ? 7'b0 : ( inst_ready == 1'b1 ? inst[6 : 0] : 7'b0 );
 assign rd     = inst[11 : 7];
 assign func3  = inst[14 : 12];
 assign func7  = inst[31 : 25]; 
@@ -84,20 +91,29 @@ assign b_10_5  = inst[30 : 25];
 assign b_4_1   = inst[11 : 8];
 
 //sort inst-type
-wire inst_i, inst_r, inst_load, inst_store, inst_ui, inst_j, inst_jalr, inst_b;
-assign inst_i     = ( opcode == `I_TYPE ) || ( opcode == `IW_TYPE );
-assign inst_r     = ( opcode == `R_TYPE ) || ( opcode == `RW_TYPE ) ;
-assign inst_load  = opcode == `LD_TYPE;
-assign inst_store = opcode == `ST_TYPE;
+wire inst_i, inst_iw, inst_r, inst_rw, inst_load, inst_store, inst_ui, inst_j, inst_jalr, inst_b;
+assign inst_i     = ~opcode[6] & ~opcode[5] & opcode[4] & ~opcode[3] & ~opcode[2];
+assign inst_iw    = ~opcode[6] & ~opcode[5] & opcode[4] & opcode[3] & ~opcode[2];
+assign inst_r     = ~opcode[6] & opcode[5] & opcode[4] & ~opcode[3] & ~opcode[2];
+assign inst_rw    = ~opcode[6] & opcode[5] & opcode[4] & opcode[3] & ~opcode[2];
+assign inst_load  = ~opcode[6] & ~opcode[5] & ~opcode[4] & ~opcode[3] & ~opcode[2];
+assign inst_store = ~opcode[6] & opcode[5] & ~opcode[4] & ~opcode[3] & ~opcode[2];
 assign inst_ui    = ~opcode[6] & opcode[4] & ~opcode[3] & opcode[2];
 assign inst_j     = opcode[6] & opcode[5] & ~opcode[4] & opcode[2];
 assign inst_jalr  = opcode[6] & opcode[5] & ~opcode[4] & ~opcode[3] & opcode[2];
 assign inst_b     = opcode[6] & opcode[5] & ~opcode[4] & ~opcode[3] & ~opcode[2];
+//sort inst_type
+assign inst_type[4] = ~opcode[6] & ~opcode[5] & opcode[4] & ~opcode[2];
+assign inst_type[3] = ~opcode[6] & opcode[5] & opcode[4] & ~opcode[2];
+assign inst_type[2] = inst_load || inst_b;
+assign inst_type[1] = inst_store || inst_j || inst_b;
+assign inst_type[0] = inst_ui || inst_j ;
+assign inst_w = inst_iw || inst_rw;
 
 //ctrl signal
-assign rs1_r_ena = inst_i || inst_r || inst_load || inst_store || inst_jalr || inst_b;
-assign rs2_r_ena = inst_r || inst_store || inst_b;
-assign rd_w_ena  = inst_i || inst_r || inst_load;
+assign rs1_r_ena = inst_i || inst_iw || inst_r || inst_rw || inst_load || inst_store || inst_jalr || inst_b;
+assign rs2_r_ena = inst_r || inst_rw || inst_store || inst_b;
+assign rd_w_ena  = inst_i || inst_iw || inst_r || inst_rw || inst_load;
 assign mem_r_ena = inst_load;
 assign mem_w_ena = inst_store;
 
@@ -106,6 +122,11 @@ wire inst_auipc;
 assign inst_auipc = ~opcode[6] & ~opcode[5] & opcode[4] & ~opcode[3] & opcode[2];
 assign pc_ena_exe = inst_auipc || inst_j || inst_b;
 
+
+//load & store 
+assign load_type  = ( inst_load == 1'b1 ) ? func3 : 3'b111;
+assign store_type = ( inst_store == 1'b1 ) ? func3 : 3'b111;
+assign mem_w_data = ( mem_w_ena == 1'b1 ) ? rs2_data : `ZERO_WORD;
 
 // I-type       opcode = 0010011
 // R-type       opcode = 0110011
@@ -118,186 +139,78 @@ assign pc_ena_exe = inst_auipc || inst_j || inst_b;
 //Jal           opcode = 1101111
 //jalr          opcode = 1100111
 //b             opcode = 1100011
-always @(*) 
-begin
-  case( opcode )
-    //i-type
-    `I_TYPE:  
-    begin
-      inst_type  = 5'b10000;
-      case( func3 )
-      000 :      begin inst_opcode = `INST_ADD;  end    //rd = rs1 + ( sign-extended )imm
-      010 :      begin inst_opcode = `INST_SLT;  end    //if ( rs1 < ( sign-extended )imm ) rd = 1
-      011 :      begin inst_opcode = `INST_SLTU; end    //if ( unsigned rs1 < unsigned imm ) rd = 1
-      100 :      begin inst_opcode = `INST_XOR;  end    //rd = rs1 ^ ( sign-extended )imm
-      110 :      begin inst_opcode = `INST_OR;   end    //rd = rs1 | ( sign-extended )imm
-      111 :      begin inst_opcode = `INST_AND;  end    //rd = rs1 & ( sign-extended )imm
-      001 :      begin inst_opcode = `INST_SLL;  end    //rd = rs1 << shamt = rs1 << imm[4 : 0]
-      101 :      begin if ( imm[10] == 1 ) 
-                       begin
-                         inst_opcode = `INST_SRA;       //rd = $signed ( rs1 ) >> shamt  = >> imm[4 : 0]      
-                       end
-                       else begin
-                         inst_opcode = `INST_SRL;       //rd = rs1 >> shamt = rs1 >> imm[4 : 0]
-                       end  
-                 end
-      default:   begin inst_opcode = `INST_NOP;  end
-      endcase
-    end 
-    `IW_TYPE:
-    begin
-      inst_type = 5'b10000;
-      case ( func3 )
-      000  :     begin inst_opcode = `INST_ADDW; end
-      001  :     begin inst_opcode = `INST_SLLW; end
-      101  :     begin if ( imm[10] == 1 ) 
-                       begin
-                         inst_opcode = `INST_SRAW;
-                       end
-                       else begin
-                         inst_opcode = `INST_SRLW;
-                       end
-                 end
-      default:   begin inst_opcode = `INST_NOP;   end 
-      endcase
-    end
-    //r-type 
-    `R_TYPE:  
-    begin
-      inst_type  = 5'b01000;
-      case( func3 )
-      000 :      begin if ( imm[10] == 1 )            //rd
-                       begin
-                         inst_opcode = `INST_SUB;       //rd = $signed( rs1 ) - $signed( rs2 )
-                       end
-                       else begin
-                         inst_opcode = `INST_ADD;       //rd = $signed( rs1 ) + $signed( rs2 )
-                       end
-                 end
-      001:       begin inst_opcode = `INST_SLL; end     //rd = rs1 >> rs2[4 : 0] 
-      010:       begin inst_opcode = `INST_SLT; end     //rd = ( $signed( rs1 ) < $signed( rs2 ) ) ? 1 : 0
-      011:       begin inst_opcode = `INST_SLTU; end    //rd = ( rs1 < rs2 ) ? 1 : 0
-      100:       begin inst_opcode = `INST_XOR; end
-      101:       begin if ( imm[10] == 1 ) 
-                       begin
-                         inst_opcode = `INST_SRA; end   //rd = $signed( rs1 ) >> rs2[4 : 0]
-                       else begin
-                         inst_opcode = `INST_SRL; end   //rd = rs1 >> rs2[4 : 0]
-                 end  
-      110:       begin inst_opcode = `INST_OR;  end
-      111:       begin inst_opcode = `INST_AND; end
-      default    begin inst_opcode = `INST_NOP; end
-      endcase
-    end
-    `RW_TYPE:
-    begin
-      inst_type = 5'b01000;
-      case ( func3 )
-      000  :     begin if ( imm[10] == 1 )            
-                       begin
-                         inst_opcode = `INST_SUBW;       
-                       end
-                       else begin
-                         inst_opcode = `INST_ADDW;       
-                       end
-                 end 
-      001  :     begin inst_opcode = `INST_SLLW; end
-      101  :     begin if ( imm[10] == 1 ) 
-                       begin
-                         inst_opcode = `INST_SRA; end  
-                       else begin
-                         inst_opcode = `INST_SRL; end   
-                 end  
-      default:   begin inst_opcode = `INST_NOP; end 
-      endcase 
-    end
-    //load-type
-    `LD_TYPE: 
-    begin
-      inst_type  = 5'b00100;
-      case( func3)
-      000 :      begin inst_opcode = `INST_LB;  end
-      001 :      begin inst_opcode = `INST_LH;  end
-      010 :      begin inst_opcode = `INST_LW;  end
-      100 :      begin inst_opcode = `INST_LBU; end
-      101 :      begin inst_opcode = `INST_LHU; end
-      110 :      begin inst_opcode = `INST_LWU; end
-      011 :      begin inst_opcode = `INST_LD;  end 
-      default:   begin inst_opcode = `INST_NOP; end
-      endcase
-    end
-    //store-type
-    `ST_TYPE:
-    begin
-      inst_type  = 5'b00010;
-      case ( func3 )
-      000:       begin inst_opcode = `INST_SB;  end
-      001:       begin inst_opcode = `INST_SH;  end
-      010:       begin inst_opcode = `INST_SW;  end
-      011:       begin inst_opcode = `INST_SD;  end
-      default:   begin inst_opcode = `INST_NOP; end
-      endcase
-    end
-    `LUI:
-    begin
-      inst_type   = 5'b00001;
-      inst_opcode = `INST_LUI;
-    end
-    `AUIPC:
-    begin
-      inst_type   = 5'b00001;
-      inst_opcode = `INST_AUIPC;
-    end
-    `JAL:
-    begin
-      inst_type   = 5'b00011;
-      inst_opcode = `INST_JAL;  
-    end
-    `JALR:
-    begin
-      inst_type   = 5'b00011;
-      inst_opcode = `INST_JALR;
-    end
-    `B_TYPE:
-    begin
-      inst_type  = 5'b00110;
-      case ( func3 )
-      000:       begin inst_opcode = `INST_BEQ;  end
-      001:       begin inst_opcode = `INST_BNE;  end
-      100:       begin inst_opcode = `INST_BLT;  end
-      101:       begin inst_opcode = `INST_BGE;  end
-      110:       begin inst_opcode = `INST_BLTU; end
-      111:       begin inst_opcode = `INST_BGEU; end 
-      default:   begin inst_opcode = `INST_NOP;  end
-      endcase
-    end
-    //rst
-    0000000: 
-    begin
-      inst_type   = 5'b0;
-      inst_opcode = 8'b0;
-    end
-    default: begin inst_opcode = `INST_NOP; end
-  endcase
-end  
+
+wire add_signal,  sub_signal,  sll_signal, slt_signal, sltu_signal, xor_signal,srl_signal, sra_signal, or_signal, and_signal, 
+     addw_signal, subw_signal, sllw_signal, srlw_signal, sraw_signal,
+     lui_signal,  auipc_signal,
+     jal_signal,  jalr_signal,
+     beq_signal,  bne_signal,  blt_signal, bge_signal, bltu_signal, bgeu_signal;
+
+wire addi_signal, addr_signal;
+assign addi_signal = inst_i & ~func3[2] & ~func3[1] & ~func3[0];
+assign addr_signal = inst_r & ~imm[10] & ~func3[2] & ~func3[1] & ~func3[0];
+
+assign add_signal = addi_signal || addr_signal;
+assign sub_signal = inst_r & imm[10] & ~func3[2] & ~func3[1] & ~func3[0];
+assign sll_signal = ( inst_i || inst_r ) & ~func3[2] & ~func3[1] & func3[0];
+assign slt_signal = ( inst_i || inst_r ) & ~func3[2] & func3[1] & ~func3[0];
+assign sltu_signal= ( inst_i || inst_r ) & ~func3[2] & func3[1] & func3[0];
+assign xor_signal = ( inst_i || inst_r ) & func3[2] & ~func3[1] & ~func3[0];
+assign srl_signal = ( inst_i || inst_r ) & ~imm[10] & func3[2] & ~func3[1] & func3[0];
+assign sra_signal = ( inst_i || inst_r ) & imm[10] & func3[2] & ~func3[1] & func3[0];
+assign or_signal  = ( inst_i || inst_r ) & func3[2] & func3[1] & ~func3[0];
+assign and_signal = ( inst_i || inst_r ) & func3[2] & func3[1] & func3[0];
+
+wire addwi_signal, addwr_signal;
+assign addwi_signal = inst_iw & ~func3[2] & ~func3[1] & ~func3[0];
+assign addwr_signal = inst_rw & ~imm[10] & ~func3[2] & ~func3[1] & ~func3[0];
+
+assign addw_signal = addwi_signal || addwr_signal;
+assign subw_signal = inst_rw & imm[10] & ~func3[2] & ~func3[1] & ~func3[0];
+assign sllw_signal = ( inst_iw || inst_rw ) & ~func3[2] & ~func3[1] & func3[0];
+assign srlw_signal = ( inst_iw || inst_rw ) & ~imm[10] & func3[2] & ~func3[1] & func3[0];
+assign sraw_signal = ( inst_iw || inst_rw ) & imm[10] & func3[2] & ~func3[1] & func3[0];
+
+assign lui_signal   = inst_ui & opcode[5];
+assign auipc_signal = inst_auipc;
+
+assign jal_signal  = inst_j & opcode[3];
+assign jalr_signal = inst_jalr;
+
+assign beq_signal = inst_b & ~func3[2] & ~func3[1] & ~func3[0];
+assign bne_signal = inst_b & ~func3[2] & ~func3[1] & func3[0];
+assign blt_signal = inst_b & func3[2] & ~func3[1] & ~func3[0];
+assign bge_signal = inst_b & func3[2] & ~func3[1] & func3[0];
+assign bltu_signal= inst_b & func3[2] & func3[1] & ~func3[0];
+assign bgeu_signal= inst_b & func3[2] & func3[1] & func3[0];
+
+assign inst_opcode[5] = inst_ui || inst_j || inst_b;
+assign inst_opcode[4] = inst_i || inst_iw || inst_r || inst_rw;
+assign inst_opcode[3] = sra_signal || or_signal || and_signal || addw_signal || subw_signal || sllw_signal || srlw_signal || sraw_signal || inst_b;
+assign inst_opcode[2] = slt_signal || sltu_signal || xor_signal || srl_signal || subw_signal || sllw_signal || srlw_signal || sraw_signal || bltu_signal || bgeu_signal;
+assign inst_opcode[1] = sub_signal || sll_signal || xor_signal || srl_signal || and_signal || addw_signal || srlw_signal || sraw_signal || inst_j || blt_signal || bge_signal;
+assign inst_opcode[0] = add_signal || sll_signal || sltu_signal || srl_signal || or_signal || addw_signal || sllw_signal || sraw_signal || auipc_signal || inst_jalr || bne_signal || bge_signal || bgeu_signal;
+
+
 
 //中间变量
 assign op2_ena    = inst_type[4] || inst_type[3] || inst_type[1];
 assign op2_i      = ( ~func3[2] & func3[1] & func3[0]) ? { {52{1'b0}}, imm } : { {52{imm[11]}}, imm };
 assign op1_ui     = { {32{imm_20[19]}}, imm_20, 12'b0 };
-assign offset_jal = { {45{j_20}}, j_19_12, j_11, j_10_1 };
-assign offset_jalr= ( offset_jal + rs1_data ) & -1 ;
+assign offset_jal = { {44{j_20}}, j_19_12, j_11, j_10_1,1'b0 };
+assign offset_jalr= ( { {52{imm[11]}}, imm } + rs1_data ) & -1 ;
 assign offset_j   = ( inst_j == 1'b1 ) ? (inst_jalr == 1'b1 ? offset_jalr :offset_jal ) : 0; 
-assign offset_b   = { {53{b_12}}, b_11, b_10_5, b_4_1};
+assign offset_b   = { {52{b_12}}, b_11, b_10_5, b_4_1,1'b0};
+assign mem_r_addr = rs1_data + { {52{imm[11]}}, imm };
+assign mem_w_addr = rs1_data + { {52{imm[11]}}, func7 , rd };
 
 //输出变量
 assign rs1_r_addr = ( rs1_r_ena == 1'b1) ? rs1 : 0;
 assign rs2_r_addr = ( rs2_r_ena == 1'b1) ? rs2 : 0;
 assign rd_addr    = rd;
-assign op1        = ( rs1_r_ena == 1'b1) ? rs1_data : ( inst_ui == 1'b1 ? op1_ui : 0 );
+assign op1        = ( rs1_r_ena == 1'b1 ) ? rs1_data : ( inst_ui == 1'b1 ? op1_ui : 0 );
 assign op2        = ( op2_ena == 1'b1 ) ? (inst_type[4] == 1'b1 ? op2_i : rs2_data ) : 0;
-assign mem_r_addr = rs1_data + { {52{imm[11]}}, imm };
-assign mem_w_addr = rs1_data + { {52{imm[11]}}, imm[11 : 5] , rd };
+assign mem_addr   = ( inst_load == 1'b1 ) ? mem_r_addr : ( inst_store == 1'b1 ? mem_w_addr : `ZERO_WORD );
 assign offset     = ( inst_j == 1'b1 ) ? offset_j : ( inst_b == 1'b1 ? offset_b : 0);
 
 endmodule

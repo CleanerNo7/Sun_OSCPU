@@ -23,53 +23,52 @@ module SimTop(
 
 //if_stage
 reg  [63 : 0]pc;
-reg  [31 : 0]inst;
-// id_stage
-// id_stage -> regfile
-wire rs1_r_ena;
-wire [4 : 0]rs1_r_addr;
-wire rs2_r_ena;
-wire [4 : 0]rs2_r_addr;
-wire rd_data_wb;
-wire [4 : 0]rd_addr;
-wire        rd_w_ena;
-// id_stage -> exe_stage
-wire pc_ena_exe;
-reg  [4 : 0]inst_type;
-reg  [7 : 0]inst_opcode;
-wire [`REG_BUS]op1;
-wire [`REG_BUS]op2;
-// id_stage -> datamem_stage
-wire mem_r_ena;
-wire mem_w_ena;
-wire mem_r_addr;
-wire mem_w_addr;
-// exe_stage -> datamem_stage
-wire mem_w_data;
-// exe_stage -> wb_stage
-wire  [2 : 0]mem;
-wire  [`REG_BUS]rd_data_exe;
-wire  [`REG_BUS]rd_data_exe_ena;
-// datamem_stage -> wb_stage
-wire [`REG_BUS]mem_r_data;
-wire rd_data_mem_ena;
-
-// regfile -> id_stage
-wire [`REG_BUS] r_data1;
-wire [`REG_BUS] r_data2;
-//regfile ->difftest
+wire         inst_ena;
+//ram_1w2r
+wire [31 : 0]inst;
+wire         inst_ready;
+reg [`REG_BUS]ram_r_data;
+//regfile
+reg [`REG_BUS]r_data1,
+              r_data2;
 wire [`REG_BUS] regs[0 : 31];
-
-// exe_stage
-// exe_stage -> other stage
-wire  [4 : 0]inst_type_o;
-// exe_stage -> regfile
-wire  [`REG_BUS]rd_data_exe;
-wire            rd_data_exe_ena;
-wire  [`REG_BUS]rd_data;
-wire  [`REG_BUS]offset;
-wire            pc_ena_if;
-wire  [`REG_BUS]pc_if;
+//id_stage
+wire pc_ena_exe,
+     rs1_r_ena,
+     rs2_r_ena,
+     mem_r_ena,
+     mem_w_ena,
+     rd_w_ena;
+wire [4 : 0]rs1_r_addr,
+            rs2_r_addr,
+            rd_addr;
+wire [`REG_BUS]mem_addr;
+wire [4 : 0]inst_type;
+wire [7 : 0]inst_opcode;
+wire        inst_w;
+wire [2 : 0]load_type,
+            store_type;
+wire [`REG_BUS]mem_w_data,
+               op1,
+               op2,
+               offset;
+//exe_stage
+wire [4 : 0]inst_type_o;
+wire pc_ena_if;
+wire [`REG_BUS]rd_data_exe;
+wire           rd_data_exe_ena;
+wire [`REG_BUS]pc_if;
+//mem_stage
+reg [`REG_BUS]mem_r_data;
+wire          rd_data_mem_ena;
+wire[`REG_BUS]ram_addr;
+wire ram_r_ena,
+     ram_w_ena;
+wire[`REG_BUS]ram_w_mask,
+              ram_w_data;
+//wb
+wire[`REG_BUS]rd_data;
+wire          rd_data_wb;
 
 if_stage If_stage(
   .clk                    (clock),
@@ -78,12 +77,31 @@ if_stage If_stage(
   .pc_if                  (pc_if),
   
   .pc                     (pc),
-  .inst                   (inst)
+  .inst_ena               (inst_ena)
 );
+
+ram_1w2r Ram_1w2r(
+  .clk                    (clock),
+  
+  .inst_addr              (pc),
+  .inst_ena               (inst_ena),
+  .inst                   (inst),
+  .inst_ready             (inst_ready),
+  
+  .ram_w_mask             (ram_w_mask),
+  .ram_addr               (ram_addr),
+  .ram_w_data             (ram_w_data),
+  .ram_r_ena              (ram_r_ena),
+  .ram_w_ena              (ram_w_ena),
+  .ram_r_data             (ram_r_data)
+
+);
+
 
 id_stage Id_stage(
   .rst                    (reset),
   .inst                   (inst),
+  .inst_ready             (inst_ready),
   .rs1_data               (r_data1),
   .rs2_data               (r_data2),
 
@@ -98,11 +116,15 @@ id_stage Id_stage(
   .rs1_r_addr             (rs1_r_addr),
   .rs2_r_addr             (rs2_r_addr),
   .rd_addr                (rd_addr),
-  .mem_r_addr             (mem_r_addr),
-  .mem_w_addr             (mem_w_addr),
+  .mem_addr               (mem_addr),
 
   .inst_type              (inst_type),
   .inst_opcode            (inst_opcode),
+  .inst_w                 (inst_w),
+  .load_type              (load_type),
+  .store_type             (store_type),
+
+  .mem_w_data             (mem_w_data),
   .op1                    (op1),
   .op2                    (op2),
   .offset                 (offset)
@@ -118,12 +140,11 @@ exe_stage Exe_stage(
   .pc_ena_exe             (pc_ena_exe),
   .pc                     (pc),
   .offset                 (offset),
+  .w                      (inst_w),
   
   .inst_type_o            (inst_type_o),
   .pc_ena_if              (pc_ena_if),
 
-  .mem                    (mem),
-  .mem_w_data             (mem_w_data),
   .rd_data_exe            (rd_data_exe),
   .rd_data_exe_ena        (rd_data_exe_ena),
   .pc_if                  (pc_if)
@@ -148,21 +169,29 @@ regfile Regfile(
   .regs_o                 (regs)
 );
 
-datamem Datamem(
-  .clk                    (clock),
+mem_stage Mem_stage(
+
   .rst                    (reset),
+
+  .load_type              (load_type),
+  .store_type             (store_type),
   .mem_r_ena              (mem_r_ena),
   .mem_w_ena              (mem_w_ena),
-  .mem_r_addr             (mem_r_addr),
-  .mem_w_addr             (mem_w_addr),
+  .mem_addr               (mem_addr),
   .mem_w_data             (mem_w_data),
-
   .mem_r_data             (mem_r_data),
-  .rd_data_mem_ena        (rd_data_mem_ena)
+  .rd_data_mem_ena        (rd_data_mem_ena),
+
+  .ram_addr               (ram_addr),
+  .ram_r_ena              (ram_r_ena),
+  .ram_w_ena              (ram_w_ena),
+  .ram_w_mask             (ram_w_mask),
+  .ram_w_data             (ram_w_data),
+  .ram_r_data             (ram_r_data)
 );
 
 wb WB(
-  .clk                    (clock),
+
   .rst                    (reset),
 
   .rd_data_mem_ena        (rd_data_mem_ena),
@@ -170,8 +199,6 @@ wb WB(
 
   .mem_r_data             (mem_r_data),
   .rd_data_exe            (rd_data_exe),
-
-  .mem                    (mem),
 
   .rd_data                (rd_data),
   .rd_data_wb             (rd_data_wb)

@@ -18,50 +18,35 @@
 //default
 `define INST_NOP    8'h10
 //i-type & r-type
-`define INST_ADD    8'h11
-`define INST_SUB    8'h12
-`define INST_SLL    8'h13
-`define INST_SLT    8'h14
-`define INST_SLTU   8'h15
-`define INST_XOR    8'h16
-`define INST_SRL    8'h17
-`define INST_SRA    8'h18
-`define INST_OR     8'h19
-`define INST_AND    8'h1A
-`define INST_ADDW   8'h1B
-`define INST_SUBW   8'h1C
-`define INST_SLLW   8'h1D
-`define INST_SRLW   8'h1E
-`define INST_SRAW   8'h1F
-
-
-//load & store
-`define INST_LB     8'h21
-`define INST_LH     8'h22
-`define INST_LW     8'h23
-`define INST_LBU    8'h24
-`define INST_LHU    8'h25
-`define INST_LWU    8'h26
-`define INST_LD     8'h27
-
-`define INST_SB     8'h2A
-`define INST_SH     8'h2B
-`define INST_SW     8'h2C
-`define INST_SD     8'h2D
+`define INST_ADD    8'h11//00010001
+`define INST_SUB    8'h12//00010010
+`define INST_SLL    8'h13//00010011      
+`define INST_SLT    8'h14//00010100
+`define INST_SLTU   8'h15//00010101
+`define INST_XOR    8'h16//00010110
+`define INST_SRL    8'h17//00010111
+`define INST_SRA    8'h18//00011000
+`define INST_OR     8'h19//00011001
+`define INST_AND    8'h1A//00011010
+`define INST_ADDW   8'h1B//00011011
+`define INST_SUBW   8'h1C//00011100
+`define INST_SLLW   8'h1D//00011101
+`define INST_SRLW   8'h1E//00011110
+`define INST_SRAW   8'h1F//00011111
 
 
 //ui
-`define INST_LUI    8'h31
-`define INST_AUIPC  8'h32
+`define INST_LUI    8'h20//00100000
+`define INST_AUIPC  8'h21//00100001
 
 // j
-`define INST_JAL    8'h3A
-`define INST_JALR   8'h3B
+`define INST_JAL    8'h22//00100010
+`define INST_JALR   8'h23//00100011
 
 //b
-`define INST_BEQ    8'h41
-`define INST_BNE    8'h42
-`define INST_BLT    8'h43
-`define INST_BGE    8'h44
-`define INST_BLTU   8'h45
-`define INST_BGEU   8'h46
+`define INST_BEQ    8'h28//00101000
+`define INST_BNE    8'h29//00101001
+`define INST_BLT    8'h2A//00101010
+`define INST_BGE    8'h2B//00101011
+`define INST_BLTU   8'h2C//00101100
+`define INST_BGEU   8'h2D//00101101
