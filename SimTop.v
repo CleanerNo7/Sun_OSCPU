@@ -27,7 +27,7 @@ wire         inst_ena;
 //ram_1w2r
 wire [31 : 0]inst;
 wire         inst_ready;
-reg [`REG_BUS]ram_r_data;
+wire[`REG_BUS]ram_r_data;
 //regfile
 reg [`REG_BUS]r_data1,
               r_data2;
@@ -64,7 +64,7 @@ wire          rd_data_mem_ena;
 wire[`REG_BUS]ram_addr;
 wire ram_r_ena,
      ram_w_ena;
-wire[`REG_BUS]ram_w_mask,
+reg[`REG_BUS]ram_w_mask,
               ram_w_data;
 //wb
 wire[`REG_BUS]rd_data;

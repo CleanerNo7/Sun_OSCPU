@@ -19,8 +19,8 @@ module mem_stage (
     output wire [`REG_BUS]ram_addr,
     output wire           ram_r_ena,
     output wire           ram_w_ena,
-    output wire [`REG_BUS]ram_w_mask,
-    output wire [`REG_BUS]ram_w_data,
+    output reg [`REG_BUS]ram_w_mask,
+    output reg [`REG_BUS]ram_w_data,
     input wire  [`REG_BUS]ram_r_data
 );
 
@@ -51,15 +51,15 @@ assign rd_data_mem_ena = mem_r_ena;
 wire sb_signal = ~store_type[2] & ~store_type[1] & ~store_type[0];
 wire sh_signal = ~store_type[2] & ~store_type[1] & store_type[0];
 wire sw_signal = ~store_type[2] & store_type[1] & ~store_type[0];
-wire sd_signal = ~store_type[2] & ~store_type[1] & store_type[0];
+wire sd_signal = ~store_type[2] & store_type[1] & store_type[0];
 
-wire lb_signal = ~load_type[2] & ~load_type[1] & ~load_type[0];
-wire lh_signal = ~load_type[2] & ~load_type[1] & load_type[0];
-wire lw_signal = ~load_type[2] & load_type[1] & ~load_type[0];
+wire lb_signal  = ~load_type[2] & ~load_type[1] & ~load_type[0];
+wire lh_signal  = ~load_type[2] & ~load_type[1] & load_type[0];
+wire lw_signal  = ~load_type[2] & load_type[1] & ~load_type[0];
 wire lbu_signal = load_type[2] & ~load_type[1] & ~load_type[0];
 wire lhu_signal = load_type[2] & ~load_type[1] & load_type[0];
 wire lwu_signal = load_type[2] & load_type[1] & ~load_type[0];
-wire ld_signal = ~load_type[2] & load_type[1] & load_type[0];
+wire ld_signal  = ~load_type[2] & load_type[1] & load_type[0];
 
 //ram_w mux
 always @(*) 
@@ -332,17 +332,12 @@ begin
     end
 end
 //ram_r_ld
-always @(ld_signal or  ram_r_data) 
-begin
-    if(ld_signal)
-    begin
-        ld_ram_r_data = ram_r_data ;
-    end    
-    else begin
-        ld_ram_r_data = `ZERO_WORD;
+ always @(ld_signal or ram_r_data) begin
+        if(ld_signal)
+            ld_ram_r_data = ram_r_data;
+        else
+            ld_ram_r_data = `ZERO_WORD;
     end
-end
-
 endmodule
 
 

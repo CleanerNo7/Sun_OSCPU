@@ -27,26 +27,35 @@ wire [63 : 0]rd_addw1,
              rd_addw,
              rd_subw1,
              rd_subw,
+             rd_sllw1,
              rd_sllw,
              rd_srlw,
              rd_sraw,
              pc_exe,
              pc_j,
              pc_b;
+wire [31 : 0]rd_sraw1,
+             rd_sraw2,
+             rd_sraw3;
 wire [5 : 0]shamt;
+
 
 assign shamt = op2[5 : 0];
 assign inst_type_o = inst_type_i;
 assign pc_ena_if   = ( inst_type_i[1] && inst_type_i[0] ) || ( inst_type_i[2] && inst_type_i[1] );
 
-assign rd_addw1 = w ? ($signed( op1 ) + $signed( op2 )) : `ZERO_WORD;
+assign rd_addw1 = w ? ( op1 + op2 ) : `ZERO_WORD;
 assign rd_addw  = {{32{rd_addw1[31]}},rd_addw1[31 : 0]};
-assign rd_subw1 = w ? ($signed( op1 ) - $signed( op2 )) : `ZERO_WORD;
+assign rd_subw1 = w ? ( op1 - op2 ) : `ZERO_WORD;
 assign rd_subw  = {{32{rd_subw1[31]}},rd_subw1[31 : 0]};
-assign rd_sllw = w ? (op1 << op2[4 : 0]) : `ZERO_WORD;
-assign rd_srlw = w ? (op1[31 : 0] >> op2[4 : 0]) : `ZERO_WORD;
-assign rd_sraw = w ? (op1[31 : 0] >> $signed( op2[4 : 0] )) : `ZERO_WORD;
+assign rd_sllw1 = w ? (op1 << shamt) : `ZERO_WORD;
+assign rd_sllw  = {{32{rd_sllw1[31]}},rd_sllw1[31 : 0]};
+assign rd_srlw  = w ? (op1[31 : 0] >> shamt ) : `ZERO_WORD;
 
+assign rd_sraw1 = w ? (op1[31 : 0] >> shamt ) : `ZERO_WORD;
+assign rd_sraw2 = (32'hFFFF_FFFF) >> shamt;
+assign rd_sraw3 = ( op1[31] == 1'b1) ? ( rd_sraw1 | ( ~rd_sraw2 ) ) : ( rd_sraw1 & rd_sraw2 );
+assign rd_sraw  = {{32{op1[31]}},  rd_sraw3};
 assign pc_exe  = ( pc_ena_exe == 1'b1 ) ? pc : `ZERO_WORD;
 
 
@@ -63,8 +72,8 @@ begin
   begin
     case( inst_opcode )
     //i-type & r-type inst_type = 5'b10000 or 5'b01000
-    `INST_ADD:   begin opop = $signed( op1 ) + $signed( op2 );              end        //rd_data
-    `INST_SUB:   begin opop = $signed( op2 ) - $signed( op1 );              end
+    `INST_ADD:   begin opop = op1 + op2;              end        //rd_data
+    `INST_SUB:   begin opop = op1 - op2;              end
     `INST_SLL:   begin opop = op1 << shamt     ;                            end   
     `INST_SLT:   begin opop = ( $signed( op1 ) < $signed( op2 ) ) ? 1 : 0;  end
     `INST_SLTU:  begin opop = ( op1 < op2 ) ? 1 : 0;                        end

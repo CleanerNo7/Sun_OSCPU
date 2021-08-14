@@ -5,18 +5,18 @@
 module ram_1w2r(
     input clk,
     
-    input [`REG_BUS]inst_addr,
-    input wire        inst_ena,
-    output wire [31:0]inst,
-    output wire       inst_ready,
+    input reg [`REG_BUS]inst_addr,
+    input wire         inst_ena,
+    output wire  [31:0]inst,
+    output wire        inst_ready,
 
     // DATA PORT
-    input [`REG_BUS]ram_w_mask,
-    input [`REG_BUS]ram_addr,
-    input [`REG_BUS]ram_w_data,
-    input           ram_r_ena,
-    input           ram_w_ena,
-    output reg [`REG_BUS]ram_r_data
+    input reg [`REG_BUS]ram_w_mask,
+    input wire[`REG_BUS]ram_addr,
+    input reg [`REG_BUS]ram_w_data,
+    input wire      ram_r_ena,
+    input wire      ram_w_ena,
+    output wire [`REG_BUS]ram_r_data
 );
 
     // INST PORT
