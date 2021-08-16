@@ -131,36 +131,36 @@ always @( sb_signal or mem_addr[2 : 0] or mem_w_data[7 : 0] )
 begin
     if(sb_signal)begin
         case(mem_addr[2 : 0])
-        3'd0:begin
+        3'b000:begin
             sb_ram_w_mask = 64'h0000_0000_0000_00FF;
             sb_ram_w_data = {56'b0,mem_w_data[7 : 0]};
         end
-        3'd1:begin
+        3'b001:begin
             sb_ram_w_mask = 64'h0000_0000_0000_FF00;
             sb_ram_w_data = {48'b0,mem_w_data[7 : 0],8'b0};
         end
-        3'd2:begin
+        3'b010:begin
             sb_ram_w_mask = 64'h0000_0000_00FF_0000;
             sb_ram_w_data = {40'b0,mem_w_data[7 : 0],16'b0};
         end
-        3'd3:begin
+        3'b011:begin
             sb_ram_w_mask = 64'h0000_0000_FF00_0000;
             sb_ram_w_data = {32'b0,mem_w_data[7 : 0],24'b0};
         end
-        3'd4:begin
+        3'b100:begin
             sb_ram_w_mask = 64'h0000_00FF_0000_0000;
             sb_ram_w_data = {24'b0,mem_w_data[7 : 0],32'b0};
         end
-        3'd5:begin
+        3'b101:begin
             sb_ram_w_mask = 64'h0000_FF00_0000_0000;
             sb_ram_w_data = {16'b0,mem_w_data[7 : 0],40'b0};
         end
-        3'd6:begin
+        3'b110:begin
             sb_ram_w_mask = 64'h00FF_0000_0000_0000;
             sb_ram_w_data = {8'b0,mem_w_data[7 : 0],48'b0};
         end
-        3'd7:begin
-            sb_ram_w_mask = 64'hFF00_0000_0000_00;
+        3'b111:begin
+            sb_ram_w_mask = 64'hFF00_0000_0000_0000;
             sb_ram_w_data = {mem_w_data[7 : 0],56'b0};
         end
         endcase

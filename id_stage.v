@@ -195,7 +195,7 @@ assign inst_opcode[0] = add_signal || sll_signal || sltu_signal || srl_signal ||
 
 //中间变量
 assign op2_ena    = inst_type[4] || inst_type[3] || inst_type[1];
-assign op2_i      = ( ~func3[2] & func3[1] & func3[0]) ? { {52{1'b0}}, imm } : { {52{imm[11]}}, imm };
+assign op2_i      =  { {52{imm[11]}}, imm };
 assign op1_ui     = { {32{imm_20[19]}}, imm_20, 12'b0 };
 assign offset_jal = { {44{j_20}}, j_19_12, j_11, j_10_1,1'b0 };
 assign offset_jalr= ( { {52{imm[11]}}, imm } + rs1_data ) & -1 ;
