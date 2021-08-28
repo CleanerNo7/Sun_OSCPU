@@ -50,3 +50,6 @@
 `define INST_BGE    8'h2B//00101011
 `define INST_BLTU   8'h2C//00101100
 `define INST_BGEU   8'h2D//00101101
+
+//customize
+`define INST_PRINTF 8'h40//01000000

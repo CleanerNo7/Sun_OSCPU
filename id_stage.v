@@ -32,7 +32,9 @@ module id_stage(
   output wire [`REG_BUS]mem_w_data,
   output wire [`REG_BUS]op1,
   output wire [`REG_BUS]op2,
-  output wire [`REG_BUS]offset
+  output wire [`REG_BUS]offset,
+
+  output wire custom_ena
 
 );
 
@@ -91,7 +93,7 @@ assign b_10_5  = inst[30 : 25];
 assign b_4_1   = inst[11 : 8];
 
 //sort inst-type
-wire inst_i, inst_iw, inst_r, inst_rw, inst_load, inst_store, inst_ui, inst_j, inst_jalr, inst_b;
+wire inst_i, inst_iw, inst_r, inst_rw, inst_load, inst_store, inst_ui, inst_j, inst_jalr, inst_b, inst_custom;
 assign inst_i     = ~opcode[6] & ~opcode[5] & opcode[4] & ~opcode[3] & ~opcode[2];
 assign inst_iw    = ~opcode[6] & ~opcode[5] & opcode[4] & opcode[3] & ~opcode[2];
 assign inst_r     = ~opcode[6] & opcode[5] & opcode[4] & ~opcode[3] & ~opcode[2];
@@ -102,19 +104,21 @@ assign inst_ui    = ~opcode[6] & opcode[4] & ~opcode[3] & opcode[2];
 assign inst_j     = opcode[6] & opcode[5] & ~opcode[4] & opcode[2];
 assign inst_jalr  = opcode[6] & opcode[5] & ~opcode[4] & ~opcode[3] & opcode[2];
 assign inst_b     = opcode[6] & opcode[5] & ~opcode[4] & ~opcode[3] & ~opcode[2];
+
+assign inst_custom= opcode[6] & opcode[5] & opcode[4] & opcode[3] & ~opcode[2];
 //sort inst_type
-assign inst_type[4] = ~opcode[6] & ~opcode[5] & opcode[4] & ~opcode[2];
-assign inst_type[3] = ~opcode[6] & opcode[5] & opcode[4] & ~opcode[2];
+assign inst_type[4] = inst_i || inst_iw || inst_custom;
+assign inst_type[3] = inst_r || inst_rw || inst_custom;
 assign inst_type[2] = inst_load || inst_b;
 assign inst_type[1] = inst_store || inst_j || inst_b;
 assign inst_type[0] = inst_ui || inst_j ;
 assign inst_w = inst_iw || inst_rw;
 
 //ctrl signal
-assign rs1_r_ena = inst_i || inst_iw || inst_r || inst_rw || inst_load || inst_store || inst_jalr || inst_b;
+assign rs1_r_ena = inst_i || inst_iw || inst_r || inst_rw || inst_load || inst_store || inst_jalr || inst_b || inst_custom;
 assign rs2_r_ena = inst_r || inst_rw || inst_store || inst_b;
-assign rd_w_ena  = inst_i || inst_iw || inst_r || inst_rw || inst_load;
-assign mem_r_ena = inst_load;
+assign rd_w_ena  = inst_i || inst_iw || inst_r || inst_rw || inst_load || inst_custom;
+assign mem_r_ena = inst_load || inst_custom;
 assign mem_w_ena = inst_store;
 
 
@@ -124,7 +128,7 @@ assign pc_ena_exe = inst_auipc || inst_j || inst_b;
 
 
 //load & store 
-assign load_type  = ( inst_load == 1'b1 ) ? func3 : 3'b111;
+assign load_type  = ( inst_load == 1'b1 ) ? func3 : ( inst_custom == 1'b1 ? 3'b011 : 3'b111);
 assign store_type = ( inst_store == 1'b1 ) ? func3 : 3'b111;
 assign mem_w_data = ( mem_w_ena == 1'b1 ) ? rs2_data : `ZERO_WORD;
 
@@ -139,6 +143,17 @@ assign mem_w_data = ( mem_w_ena == 1'b1 ) ? rs2_data : `ZERO_WORD;
 //Jal           opcode = 1101111
 //jalr          opcode = 1100111
 //b             opcode = 1100011
+
+//customize     opcode = 1111011
+//              inst_type = 5'b11000
+
+//I-type & IW-type inst_type = 5'b10000
+//R-type & RW-type inst_type = 5'b01000
+//load-type        inst_type = 5'b00100
+//store-type       inst_type = 5'b00010
+//lui    & auipc   inst_type = 5'b00001
+//J-type           inst_type = 5'b00011
+//B-type           inst_type = 5'b00110
 
 wire add_signal,  sub_signal,  sll_signal, slt_signal, sltu_signal, xor_signal,srl_signal, sra_signal, or_signal, and_signal, 
      addw_signal, subw_signal, sllw_signal, srlw_signal, sraw_signal,
@@ -184,6 +199,7 @@ assign bge_signal = inst_b & func3[2] & ~func3[1] & func3[0];
 assign bltu_signal= inst_b & func3[2] & func3[1] & ~func3[0];
 assign bgeu_signal= inst_b & func3[2] & func3[1] & func3[0];
 
+assign inst_opcode[6] = inst_custom;
 assign inst_opcode[5] = inst_ui || inst_j || inst_b;
 assign inst_opcode[4] = inst_i || inst_iw || inst_r || inst_rw;
 assign inst_opcode[3] = sra_signal || or_signal || and_signal || addw_signal || subw_signal || sllw_signal || srlw_signal || sraw_signal || inst_b;
@@ -201,7 +217,7 @@ assign offset_jal = { {44{j_20}}, j_19_12, j_11, j_10_1,1'b0 };
 assign offset_jalr= ( { {52{imm[11]}}, imm } + rs1_data ) & -1 ;
 assign offset_j   = ( inst_j == 1'b1 ) ? (inst_jalr == 1'b1 ? offset_jalr :offset_jal ) : 0; 
 assign offset_b   = { {52{b_12}}, b_11, b_10_5, b_4_1,1'b0};
-assign mem_r_addr = rs1_data + { {52{imm[11]}}, imm };
+assign mem_r_addr = ( inst_custom == 1'b1 ) ? rs1 : ( rs1_data + { {52{imm[11]}}, imm });
 assign mem_w_addr = rs1_data + { {52{imm[11]}}, func7 , rd };
 
 //输出变量
@@ -210,7 +226,9 @@ assign rs2_r_addr = ( rs2_r_ena == 1'b1) ? rs2 : 0;
 assign rd_addr    = rd;
 assign op1        = ( rs1_r_ena == 1'b1 ) ? rs1_data : ( inst_ui == 1'b1 ? op1_ui : 0 );
 assign op2        = ( op2_ena == 1'b1 ) ? (inst_type[4] == 1'b1 ? op2_i : rs2_data ) : 0;
-assign mem_addr   = ( inst_load == 1'b1 ) ? mem_r_addr : ( inst_store == 1'b1 ? mem_w_addr : `ZERO_WORD );
+assign mem_addr   = ( inst_load | inst_custom == 1'b1 ) ? mem_r_addr : ( inst_store == 1'b1 ? mem_w_addr : `ZERO_WORD );
 assign offset     = ( inst_j == 1'b1 ) ? offset_j : ( inst_b == 1'b1 ? offset_b : 0);
+
+assign custom_ena = inst_custom;
 
 endmodule

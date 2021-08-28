@@ -19,7 +19,7 @@ module wb(
 );
 
 assign rd_data_wb = rd_data_mem_ena || rd_data_exe_ena;
-assign rd_data    = ( rst == 1'b1) ? `ZERO_WORD : ( rd_data_exe_ena == 1'b1 ? rd_data_exe : ( rd_data_mem_ena == 1'b1 ? mem_r_data : `ZERO_WORD));
+assign rd_data    = ( rst == 1'b1) ? `ZERO_WORD : ( rd_data_mem_ena == 1'b1 ? mem_r_data : ( rd_data_exe_ena == 1'b1 ? rd_data_exe : `ZERO_WORD));
 
 
 endmodule

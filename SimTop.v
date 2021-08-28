@@ -69,6 +69,7 @@ reg[`REG_BUS]ram_w_mask,
 //wb
 wire[`REG_BUS]rd_data;
 wire          rd_data_wb;
+wire          custom_ena;
 
 if_stage If_stage(
   .clk                    (clock),
@@ -127,7 +128,9 @@ id_stage Id_stage(
   .mem_w_data             (mem_w_data),
   .op1                    (op1),
   .op2                    (op2),
-  .offset                 (offset)
+  .offset                 (offset),
+
+  .custom_ena             (custom_ena)
 );
 
 exe_stage Exe_stage(
@@ -204,6 +207,8 @@ wb WB(
   .rd_data_wb             (rd_data_wb)
 );
 
+
+
 // Difftest
 reg cmt_wen;
 reg [7:0] cmt_wdest;
@@ -216,12 +221,13 @@ reg [7:0] trap_code;
 reg [63:0] cycleCnt;
 reg [63:0] instrCnt;
 reg [`REG_BUS] regs_diff [0 : 31];
+reg cmt_skip;
 
 wire inst_valid = (pc != `PC_START) | (inst != 0);
 
 always @(negedge clock) begin
   if (reset) begin
-    {cmt_wen, cmt_wdest, cmt_wdata, cmt_pc, cmt_inst, cmt_valid, trap, trap_code, cycleCnt, instrCnt} <= 0;
+    {cmt_wen, cmt_wdest, cmt_wdata, cmt_pc, cmt_inst, cmt_valid, trap, trap_code, cycleCnt, instrCnt, cmt_skip} <= 0;
   end
   else if (~trap) begin
     cmt_wen <= rd_w_ena;
@@ -237,8 +243,16 @@ always @(negedge clock) begin
     trap_code <= regs[10][7:0];
     cycleCnt <= cycleCnt + 1;
     instrCnt <= instrCnt + inst_valid;
+    cmt_skip <= custom_ena;
   end
 end
+
+always @(posedge clock) 
+begin
+    if (inst == 32'h5007b) begin
+      $write("%c", regs[10]);
+    end
+end 
 
 DifftestInstrCommit DifftestInstrCommit(
   .clock              (clock),
@@ -247,7 +261,7 @@ DifftestInstrCommit DifftestInstrCommit(
   .valid              (cmt_valid),
   .pc                 (cmt_pc),
   .instr              (cmt_inst),
-  .skip               (0),
+  .skip               (cmt_skip),
   .isRVC              (0),
   .scFailed           (0),
   .wen                (cmt_wen),
